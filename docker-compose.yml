@@ -102,7 +102,7 @@ services:
       - appstore-network
 
   keycloak:
-    image: quay.io/keycloak/keycloak:24.0
+    image: quay.io/keycloak/keycloak:26.0
     restart: unless-stopped
     environment:
       - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN_USER}
@@ -111,6 +111,12 @@ services:
       - KC_DB_URL=jdbc:postgresql://db:5432/${DB_NAME}
       - KC_DB_USERNAME=${DB_USER}
       - KC_DB_PASSWORD=${DB_PASSWORD}
+      - KC_HOSTNAME=${KEYCLOAK_URL}
+      - KC_HOSTNAME_STRICT=false
+      - KC_PROXY_HEADERS=forwarded
+      - KC_HTTP_ENABLED=true
+      - KC_HEALTH_ENABLED=true
+      - KC_METRICS_ENABLED=true
     depends_on:
       db:
         condition: service_healthy
@@ -118,6 +124,30 @@ services:
       - appstore-network
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm.json
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1536M
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    networks:
+      - appstore-network
+    volumes:
+      - ./nginx/certs:/etc/nginx/certs:ro
 
 networks:
   appstore-network:

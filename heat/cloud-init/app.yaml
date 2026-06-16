@@ -39,7 +39,7 @@ write_files:
       # Docker installieren
       export DEBIAN_FRONTEND=noninteractive
       apt-get update -q
-      apt-get install -yq ca-certificates curl gnupg git jq
+      apt-get install -yq ca-certificates curl gnupg git jq openssl
 
       install -m 0755 -d /etc/apt/keyrings
       curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -121,6 +121,14 @@ write_files:
       # logs Ordner anlegen
       mkdir -p /opt/appstore/logs
       chown ubuntu:ubuntu /opt/appstore/logs
+
+      # Self-signed certificate für nginx generieren
+      mkdir -p /opt/appstore/nginx/certs
+      openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+        -keyout /opt/appstore/nginx/certs/selfsigned.key \
+        -out /opt/appstore/nginx/certs/selfsigned.crt \
+        -subj "/CN=${SERVER_IP}"
+      chown -R ubuntu:ubuntu /opt/appstore/nginx/certs
 
       cat > /etc/motd << EOF
       AppStore App Server [${ENVIRONMENT}]

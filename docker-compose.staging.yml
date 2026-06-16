@@ -1,9 +1,8 @@
 # Staging-Overrides:
 # - Kein Traefik, kein Let's Encrypt
-# - Ports direkt exposed
-# - Keycloak auf Port 8443 mit self-signed Zertifikat
+# - nginx terminiert HTTPS (443) und proxied zu Keycloak (8080) und API (8000)
+# - Keycloak läuft intern auf HTTP
 # - Monitoring-Stack aktiv
-# - Frontend nginx mit self-signed Zertifikat (bereits im Image eingebaut)
 
 services:
   api:
@@ -17,51 +16,16 @@ services:
       logging: "promtail"
       logging_jobname: "celery-worker"
 
-  frontend:
+  keycloak:
+    command: start --import-realm
+
+  nginx:
     ports:
       - "80:80"
       - "443:443"
-
-  keycloak-cert-init:
-    image: openjdk:17-slim
-    restart: "no"
-    entrypoint: >
-      bash -c "
-        if [ ! -f /certs/keycloak.p12 ]; then
-          keytool -genkeypair -alias keycloak -keyalg RSA -keysize 2048
-            -validity 3650 -keystore /certs/keycloak.p12 -storetype PKCS12
-            -storepass keycloak -keypass keycloak
-            -dname 'CN=${SERVER_IP},OU=AppStore,O=DHBW,L=Mannheim,ST=BW,C=DE' &&
-          echo 'Certificate generated';
-        else
-          echo 'Certificate already exists';
-        fi
-      "
     volumes:
-      - keycloak-certs:/certs
-    networks:
-      - appstore-network
-
-  keycloak:
-    command: >
-      start
-      --import-realm
-      --proxy=edge
-      --hostname=${KEYCLOAK_URL}
-      --hostname-strict=false
-      --https-key-store-file=/opt/keycloak/conf/keycloak.p12
-      --https-key-store-password=keycloak
-      --https-port=8443
-    ports:
-      - "8443:8443"
-    volumes:
-      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm.json
-      - keycloak-certs:/opt/keycloak/conf
-    depends_on:
-      db:
-        condition: service_healthy
-      keycloak-cert-init:
-        condition: service_completed_successfully
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
 
   prometheus:
     image: prom/prometheus:v2.48.1
@@ -121,7 +85,6 @@ services:
       - appstore-network
 
 volumes:
-  keycloak-certs:
   postgres-data:
     driver: local
     driver_opts:

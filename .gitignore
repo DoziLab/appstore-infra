@@ -4,3 +4,4 @@ letsencrypt/
 *.pem
 *.key
 clouds.yaml
+nginx/certs/
