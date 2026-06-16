@@ -677,11 +677,11 @@
       "clientAuthenticatorType": "client-secret",
       "redirectUris": [
         "http://localhost:3000/*",
-        "https://${FRONTEND_HOSTNAME}/*"
+        "https://*"
       ],
       "webOrigins": [
         "http://localhost:3000",
-        "https://${FRONTEND_HOSTNAME}"
+        "+"
       ],
       "notBefore": 0,
       "bearerOnly": false,
@@ -695,7 +695,7 @@
       "protocol": "openid-connect",
       "attributes": {
         "client.introspection.response.allow.jwt.claim.enabled": "false",
-        "post.logout.redirect.uris": "http://localhost:3000/*##https://${FRONTEND_HOSTNAME}/*",
+        "post.logout.redirect.uris": "http://localhost:3000/*##https://*",
         "oauth2.device.authorization.grant.enabled": "false",
         "backchannel.logout.revoke.offline.tokens": "false",
         "use.refresh.tokens": "true",
