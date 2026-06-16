@@ -1,8 +1,8 @@
-# Dev-Overrides:
-# - Backend/Frontend werden lokal gebaut (kein ghcr.io Image nötig)
-# - Source-Code wird als Volume gemountet → Hot-Reload
-# - Keycloak läuft im dev-Modus (kein HTTPS nötig)
-# - Alle Ports sind direkt erreichbar
+# Dev overrides:
+# - Backend/Frontend built locally (no ghcr.io image needed)
+# - Source code mounted as volume for hot-reload
+# - Keycloak runs in dev mode (no HTTPS required)
+# - All ports directly accessible
 
 services:
   api:

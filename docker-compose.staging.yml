@@ -1,8 +1,8 @@
-# Staging-Overrides:
-# - Kein Traefik, kein Let's Encrypt
-# - nginx terminiert HTTPS (443) und proxied zu Keycloak (8080) und API (8000)
-# - Keycloak läuft intern auf HTTP
-# - Monitoring-Stack aktiv
+# Staging overrides:
+# - No Traefik, no TLS termination via Let's Encrypt
+# - nginx terminates HTTPS (443) and proxies to Keycloak (8080) and API (8000)
+# - Keycloak runs internally on HTTP
+# - Monitoring stack active
 
 services:
   api:

@@ -33,7 +33,7 @@ write_files:
 
       echo "App server setup started $(date -Is) [${ENVIRONMENT}]"
 
-      # Docker installieren
+      # Install Docker
       export DEBIAN_FRONTEND=noninteractive
       apt-get update -q
       apt-get install -yq ca-certificates curl gnupg git jq openssl
@@ -47,7 +47,7 @@ write_files:
       usermod -aG docker ubuntu
       systemctl enable --now docker
 
-      # Cinder Volume mounten (/dev/vdb → /data)
+      # Mount Cinder volume (/dev/vdb -> /data)
       if [ -b /dev/vdb ]; then
         if ! blkid /dev/vdb | grep -q ext4; then
           echo "Formatting Cinder volume /dev/vdb..."
@@ -63,7 +63,7 @@ write_files:
         mkdir -p /data
       fi
 
-      # Docker Daten-Ordner auf /data anlegen mit korrekten Berechtigungen
+      # Create Docker data directories on /data with correct permissions
       mkdir -p /data/postgres /data/redis /data/keycloak /data/loki /data/grafana /data/prometheus
       mkdir -p /data/loki/wal /data/loki/index /data/loki/chunks /data/loki/compactor /data/loki/index_cache
       chown 999:999 /data/postgres
@@ -71,16 +71,16 @@ write_files:
       chown 472:472 /data/grafana
       chown ubuntu:ubuntu /data/redis /data/prometheus /data/keycloak
 
-      # Infra-Repo auschecken
+      # Clone infra repo
       git clone "https://github.com/${GITHUB_ORG}/${INFRA_REPO}.git" /opt/appstore
       chown -R ubuntu:ubuntu /opt/appstore
 
-      # Floating IP automatisch aus OpenStack Metadata holen
+      # Get floating IP from OpenStack metadata
       SERVER_IP=""
       SERVER_IP=$(curl -sf --max-time 5 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null) || true
       if [ -z "${SERVER_IP}" ]; then
         SERVER_IP=$(curl -sf --max-time 5 http://169.254.169.254/openstack/latest/meta_data.json 2>/dev/null \
-          | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('public_ipv4') or list(d.get('network',{}).get('links',[{}]))[0].get('mtu',''))" 2>/dev/null) || true
+          | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('public_ipv4',''))" 2>/dev/null) || true
       fi
       if [ -z "${SERVER_IP}" ]; then
         echo "WARNING: Could not determine public IP, using placeholder"
@@ -89,50 +89,27 @@ write_files:
       echo "Server IP: ${SERVER_IP}"
       KEYCLOAK_URL="https://${SERVER_IP}:8443"
 
-      # Frontend Image Tag je nach Umgebung
+      # Set frontend image tag based on environment
       if [ "${ENVIRONMENT}" = "staging" ]; then
         FRONTEND_IMAGE="ghcr.io/${GITHUB_ORG}/appstore-frontend:staging"
       else
         FRONTEND_IMAGE="ghcr.io/${GITHUB_ORG}/appstore-frontend:latest"
       fi
 
-      # .env schreiben
-      cat > /opt/appstore/.env << EOF
-SERVER_IP=${SERVER_IP}
-
-DB_USER=postgres
-DB_PASSWORD=${DB_PASSWORD}
-DB_NAME=dozilab
-DB_PORT=5432
-
-ENCRYPTION_KEY=${ENCRYPTION_KEY}
-
-KEYCLOAK_ADMIN_USER=admin
-KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
-KEYCLOAK_REALM=Dozilab
-KEYCLOAK_CLIENT_ID_BACKEND=appstore-backend
-KEYCLOAK_CLIENT_ID_FRONTEND=appstore-frontend
-KEYCLOAK_JWKS_CACHE_TTL=3600
-KEYCLOAK_URL=${KEYCLOAK_URL}
-
-ANSIBLE_SSH_KEY_PATH=/home/ubuntu/.ssh/dozilab_ansible
-ANSIBLE_SSH_KEY_NAME=dozilab-ansible-key
-
-GRAFANA_ADMIN_USER=admin
-GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
-
-BACKEND_IMAGE=ghcr.io/${GITHUB_ORG}/appstore-backend:latest
-FRONTEND_IMAGE=${FRONTEND_IMAGE}
-EOF
+      # Write .env (using printf instead of heredoc to avoid YAML parsing issues)
+      printf 'SERVER_IP=%s\n\nDB_USER=postgres\nDB_PASSWORD=%s\nDB_NAME=dozilab\nDB_PORT=5432\n\nENCRYPTION_KEY=%s\n\nKEYCLOAK_ADMIN_USER=admin\nKEYCLOAK_ADMIN_PASSWORD=%s\nKEYCLOAK_REALM=Dozilab\nKEYCLOAK_CLIENT_ID_BACKEND=appstore-backend\nKEYCLOAK_CLIENT_ID_FRONTEND=appstore-frontend\nKEYCLOAK_JWKS_CACHE_TTL=3600\nKEYCLOAK_URL=%s\n\nANSIBLE_SSH_KEY_PATH=/home/ubuntu/.ssh/dozilab_ansible\nANSIBLE_SSH_KEY_NAME=dozilab-ansible-key\n\nGRAFANA_ADMIN_USER=admin\nGRAFANA_ADMIN_PASSWORD=%s\n\nBACKEND_IMAGE=ghcr.io/%s/appstore-backend:latest\nFRONTEND_IMAGE=%s\n' \
+        "${SERVER_IP}" "${DB_PASSWORD}" "${ENCRYPTION_KEY}" "${KEYCLOAK_ADMIN_PASSWORD}" \
+        "${KEYCLOAK_URL}" "${GRAFANA_ADMIN_PASSWORD}" "${GITHUB_ORG}" "${FRONTEND_IMAGE}" \
+        > /opt/appstore/.env
 
       chown ubuntu:ubuntu /opt/appstore/.env
       chmod 600 /opt/appstore/.env
 
-      # logs Ordner anlegen
+      # Create logs directory
       mkdir -p /opt/appstore/logs
       chown ubuntu:ubuntu /opt/appstore/logs
 
-      # Self-signed certificate für nginx generieren
+      # Generate self-signed certificate for nginx
       mkdir -p /opt/appstore/nginx/certs
       openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
         -keyout /opt/appstore/nginx/certs/selfsigned.key \
@@ -140,12 +117,8 @@ EOF
         -subj "/CN=${SERVER_IP}"
       chown -R ubuntu:ubuntu /opt/appstore/nginx/certs
 
-      cat > /etc/motd << EOF
-AppStore App Server [${ENVIRONMENT}]
-Stack:  ${STACK_LABEL}
-IP:     ${SERVER_IP}
-Infra:  /opt/appstore
-EOF
+      printf 'AppStore App Server [%s]\nStack: %s\nIP:    %s\nInfra: /opt/appstore\n' \
+        "${ENVIRONMENT}" "${STACK_LABEL}" "${SERVER_IP}" > /etc/motd
 
       echo "DOZILAB_READY stack=${STACK_LABEL} time=$(date -Is)" | tee /dev/console > "${MARK_DIR}/ready"
       echo "App server setup finished $(date -Is)"

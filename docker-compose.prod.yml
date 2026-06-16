@@ -1,8 +1,8 @@
-# Production-Overrides:
-# - Identisch zu Staging
-# - nginx terminiert HTTPS (443) und proxied zu Keycloak (8080) und API (8000)
-# - Keycloak läuft intern auf HTTP
-# - Monitoring-Stack aktiv
+# Production overrides:
+# - Identical to staging
+# - nginx terminates HTTPS (443) and proxies to Keycloak (8080) and API (8000)
+# - Keycloak runs internally on HTTP
+# - Monitoring stack active
 
 services:
   api:

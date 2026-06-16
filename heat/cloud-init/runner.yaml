@@ -29,7 +29,7 @@ write_files:
 
       echo "Runner setup started $(date -Is)"
 
-      # Docker installieren
+      # Install Docker
       export DEBIAN_FRONTEND=noninteractive
       apt-get update -q
       apt-get install -yq ca-certificates curl gnupg git jq
@@ -43,7 +43,7 @@ write_files:
       usermod -aG docker ubuntu
       systemctl enable --now docker
 
-      # GitHub Actions Runner installieren
+      # Install GitHub Actions Runner
       RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name' | sed 's/v//')
       mkdir -p /home/ubuntu/actions-runner
       cd /home/ubuntu/actions-runner
@@ -54,7 +54,7 @@ write_files:
       rm runner.tar.gz
       chown -R ubuntu:ubuntu /home/ubuntu/actions-runner
 
-      # Runner konfigurieren
+      # Configure runner
       sudo -u ubuntu ./config.sh \
         --url "https://github.com/${GITHUB_ORG}" \
         --token "${GITHUB_RUNNER_TOKEN}" \
@@ -63,7 +63,7 @@ write_files:
         --unattended \
         --replace
 
-      # Als Service einrichten
+      # Install as system service
       ./svc.sh install ubuntu
       ./svc.sh start
 
