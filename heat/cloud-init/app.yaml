@@ -67,9 +67,12 @@ write_files:
         mkdir -p /data
       fi
 
-      # Docker Daten-Ordner auf /data anlegen
+      # Docker Daten-Ordner auf /data anlegen mit korrekten Berechtigungen
       mkdir -p /data/postgres /data/redis /data/keycloak /data/loki /data/grafana /data/prometheus
-      chown -R ubuntu:ubuntu /data
+      chown 999:999 /data/postgres      # postgres container user
+      chown 10001:10001 /data/loki      # loki container user
+      chown 472:472 /data/grafana       # grafana container user
+      chown ubuntu:ubuntu /data/redis /data/prometheus /data/keycloak
 
       # Infra-Repo auschecken
       git clone "https://github.com/${GITHUB_ORG}/${INFRA_REPO}.git" /opt/appstore
