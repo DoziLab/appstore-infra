@@ -1,0 +1,128 @@
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    networks:
+      - appstore-network
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - appstore-network
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ${BACKEND_IMAGE:-ghcr.io/your-org/appstore-backend:latest}
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DB_HOST=db
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - KEYCLOAK_URL=${KEYCLOAK_URL}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID_BACKEND:-appstore-backend}
+      - KEYCLOAK_JWKS_CACHE_TTL=${KEYCLOAK_JWKS_CACHE_TTL:-3600}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ANSIBLE_SSH_KEY_PATH=/run/secrets/dozilab_ansible
+      - ANSIBLE_SSH_KEY_NAME=${ANSIBLE_SSH_KEY_NAME:-dozilab-ansible-key}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - appstore-network
+    volumes:
+      - ./logs:/app/logs
+      - ${ANSIBLE_SSH_KEY_PATH}:/run/secrets/dozilab_ansible:ro
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  celery-worker:
+    image: ${BACKEND_IMAGE:-ghcr.io/your-org/appstore-backend:latest}
+    restart: unless-stopped
+    command: celery -A src.celery_app:celery_app worker --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DB_HOST=db
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - KEYCLOAK_URL=${KEYCLOAK_URL}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID_BACKEND:-appstore-backend}
+      - KEYCLOAK_JWKS_CACHE_TTL=${KEYCLOAK_JWKS_CACHE_TTL:-3600}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - ANSIBLE_SSH_KEY_PATH=/run/secrets/dozilab_ansible
+      - ANSIBLE_SSH_KEY_NAME=${ANSIBLE_SSH_KEY_NAME:-dozilab-ansible-key}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - appstore-network
+    volumes:
+      - ./logs:/app/logs
+      - ${ANSIBLE_SSH_KEY_PATH}:/run/secrets/dozilab_ansible:ro
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/your-org/appstore-frontend:latest}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - appstore-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    restart: unless-stopped
+    environment:
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN_USER}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://db:5432/${DB_NAME}
+      - KC_DB_USERNAME=${DB_USER}
+      - KC_DB_PASSWORD=${DB_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - appstore-network
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm.json
+
+networks:
+  appstore-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:

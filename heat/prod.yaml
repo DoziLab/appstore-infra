@@ -1,0 +1,219 @@
+heat_template_version: 2018-08-31
+
+description: AppStore Production Server — Docker + Infra-Repo + .env
+
+parameters:
+  stack_label:
+    type: string
+    default: "prod"
+    constraints:
+      - allowed_pattern: '^[a-z0-9][a-z0-9-]{0,30}$'
+
+  image:
+    type: string
+    default: "Ubuntu 22.04 2025-01"
+    constraints:
+      - allowed_values:
+          - "Ubuntu 22.04 2025-01"
+          - "Ubuntu 24.04 2025-01"
+          - "Ubuntu 24.04 2026-01"
+
+  flavor:
+    type: string
+    default: "gp1.medium"
+    constraints:
+      - allowed_values:
+          - "gp1.medium"
+          - "gp1.large"
+    description: "Mindestens gp1.medium — Keycloak braucht ~1.5GB RAM."
+
+  network:
+    type: string
+    default: "NAT"
+    constraints:
+      - allowed_values: ["NAT"]
+
+  external_network:
+    type: string
+    default: "DHBW"
+    constraints:
+      - allowed_values: ["DHBW"]
+
+  ssh_cidr:
+    type: string
+    default: "141.72.0.0/16"
+    constraints:
+      - allowed_pattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
+
+  public_key:
+    type: string
+    description: "Inhalt des lokalen Public Keys (~/.ssh/appstore-prod.pub)."
+
+  github_org:
+    type: string
+    description: "GitHub Organisation, z.B. dozilab"
+
+  infra_repo:
+    type: string
+    default: "appstore-infra"
+    description: "Name des Infra-Repos auf GitHub."
+
+  db_password:
+    type: string
+    hidden: true
+    description: "Passwort für PostgreSQL."
+
+  keycloak_admin_password:
+    type: string
+    hidden: true
+    description: "Passwort für Keycloak Admin."
+
+  encryption_key:
+    type: string
+    hidden: true
+    description: "Fernet Encryption Key für das Backend."
+
+  grafana_admin_password:
+    type: string
+    hidden: true
+    description: "Passwort für Grafana Admin."
+
+resources:
+  keypair:
+    type: OS::Nova::KeyPair
+    properties:
+      name:
+        str_replace:
+          template: "appstore-prod-STACK-key"
+          params:
+            STACK: { get_param: stack_label }
+      public_key: { get_param: public_key }
+
+  secgroup:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      description: AppStore Production security group
+      rules:
+        - direction: ingress
+          ethertype: IPv4
+          protocol: tcp
+          port_range_min: 22
+          port_range_max: 22
+          remote_ip_prefix: { get_param: ssh_cidr }
+        - direction: ingress
+          ethertype: IPv4
+          protocol: tcp
+          port_range_min: 80
+          port_range_max: 80
+          remote_ip_prefix: "0.0.0.0/0"
+        - direction: ingress
+          ethertype: IPv4
+          protocol: tcp
+          port_range_min: 443
+          port_range_max: 443
+          remote_ip_prefix: "0.0.0.0/0"
+        - direction: ingress
+          ethertype: IPv4
+          protocol: tcp
+          port_range_min: 8443
+          port_range_max: 8443
+          remote_ip_prefix: "0.0.0.0/0"
+        - direction: ingress
+          ethertype: IPv4
+          protocol: icmp
+          remote_ip_prefix: { get_param: ssh_cidr }
+        - direction: egress
+          ethertype: IPv4
+
+  port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_param: network }
+      security_groups:
+        - { get_resource: secgroup }
+
+  server:
+    type: OS::Nova::Server
+    properties:
+      name:
+        str_replace:
+          template: "appstore-prod-STACK"
+          params:
+            STACK: { get_param: stack_label }
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_resource: keypair }
+      networks:
+        - port: { get_resource: port }
+      metadata:
+        dozilab_stack_label: { get_param: stack_label }
+        dozilab_ready_marker: "DOZILAB_READY"
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          template: { get_file: cloud-init/app.yaml }
+          params:
+            __STACK_LABEL__:             { get_param: stack_label }
+            __ENVIRONMENT__:             "prod"
+            __GITHUB_ORG__:              { get_param: github_org }
+            __INFRA_REPO__:              { get_param: infra_repo }
+            __DB_PASSWORD__:             { get_param: db_password }
+            __KEYCLOAK_ADMIN_PASSWORD__: { get_param: keycloak_admin_password }
+            __ENCRYPTION_KEY__:          { get_param: encryption_key }
+            __GRAFANA_ADMIN_PASSWORD__:  { get_param: grafana_admin_password }
+
+  fip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: external_network }
+
+  fip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: fip }
+      port_id: { get_resource: port }
+
+outputs:
+  floating_ip:
+    description: Public floating IP of the production server
+    value: { get_attr: [fip, floating_ip_address] }
+
+  frontend_url:
+    description: Frontend URL
+    value:
+      str_replace:
+        template: "https://IP"
+        params:
+          IP: { get_attr: [fip, floating_ip_address] }
+
+  keycloak_url:
+    description: Keycloak URL
+    value:
+      str_replace:
+        template: "https://IP:8443"
+        params:
+          IP: { get_attr: [fip, floating_ip_address] }
+
+  grafana_url:
+    description: Grafana URL
+    value:
+      str_replace:
+        template: "http://IP:3000"
+        params:
+          IP: { get_attr: [fip, floating_ip_address] }
+
+  ssh_hint:
+    description: SSH command
+    value:
+      str_replace:
+        template: "ssh -i ~/.ssh/dozilab-appstore-prod ubuntu@FIP"
+        params:
+          FIP: { get_attr: [fip, floating_ip_address] }
+
+  ready_marker:
+    description: Marker in Nova console log after cloud-init finished
+    value:
+      str_replace:
+        template: "DOZILAB_READY stack=STACK"
+        params:
+          STACK: { get_param: stack_label }

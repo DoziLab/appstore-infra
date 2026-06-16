@@ -1,0 +1,6 @@
+.env
+logs/
+letsencrypt/
+*.pem
+*.key
+clouds.yaml

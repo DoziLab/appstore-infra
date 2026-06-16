@@ -1,0 +1,83 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+
+write_files:
+  - path: /usr/local/bin/appstore-runner-setup.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      STACK_LABEL="__STACK_LABEL__"
+      GITHUB_ORG="__GITHUB_ORG__"
+      GITHUB_RUNNER_TOKEN="__GITHUB_RUNNER_TOKEN__"
+      RUNNER_LABELS="__RUNNER_LABELS__"
+      LOG="/var/log/appstore-runner-setup.log"
+      MARK_DIR="/var/lib/dozilab"
+
+      mkdir -p "$MARK_DIR"
+      exec > >(tee -a "$LOG" /var/log/cloud-init-output.log) 2>&1
+
+      on_fail() {
+        rc=$?
+        echo "DOZILAB_FAILED stack=${STACK_LABEL} rc=${rc} time=$(date -Is)" | tee /dev/console > "${MARK_DIR}/failed"
+        exit "$rc"
+      }
+      trap on_fail ERR
+
+      echo "Runner setup started $(date -Is)"
+
+      # Docker installieren
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -q
+      apt-get install -yq ca-certificates curl gnupg git jq
+
+      install -m 0755 -d /etc/apt/keyrings
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      chmod a+r /etc/apt/keyrings/docker.gpg
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+      apt-get update -q
+      apt-get install -yq docker-ce docker-ce-cli containerd.io docker-compose-plugin
+      usermod -aG docker ubuntu
+      systemctl enable --now docker
+
+      # GitHub Actions Runner installieren
+      RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name' | sed 's/v//')
+      mkdir -p /home/ubuntu/actions-runner
+      cd /home/ubuntu/actions-runner
+
+      curl -fsSL "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" \
+        -o runner.tar.gz
+      tar xzf runner.tar.gz
+      rm runner.tar.gz
+      chown -R ubuntu:ubuntu /home/ubuntu/actions-runner
+
+      # Runner konfigurieren
+      sudo -u ubuntu ./config.sh \
+        --url "https://github.com/${GITHUB_ORG}" \
+        --token "${GITHUB_RUNNER_TOKEN}" \
+        --name "${STACK_LABEL}" \
+        --labels "${RUNNER_LABELS}" \
+        --unattended \
+        --replace
+
+      # Als Service einrichten
+      ./svc.sh install ubuntu
+      ./svc.sh start
+
+      cat > /etc/motd << EOF
+      AppStore GitHub Runner
+      Stack:  ${STACK_LABEL}
+      Org:    ${GITHUB_ORG}
+      Labels: ${RUNNER_LABELS}
+      EOF
+
+      echo "DOZILAB_READY stack=${STACK_LABEL} time=$(date -Is)" | tee /dev/console > "${MARK_DIR}/ready"
+      echo "Runner setup finished $(date -Is)"
+
+runcmd:
+  - [ bash, -lc, "/usr/local/bin/appstore-runner-setup.sh" ]
+
+final_message: "AppStore GitHub Runner: cloud-init finished"

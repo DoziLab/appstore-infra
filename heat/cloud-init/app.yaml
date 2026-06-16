@@ -1,0 +1,117 @@
+#cloud-config
+package_update: true
+package_upgrade: false
+
+write_files:
+  - path: /usr/local/bin/appstore-app-setup.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      STACK_LABEL="__STACK_LABEL__"
+      ENVIRONMENT="__ENVIRONMENT__"
+      GITHUB_ORG="__GITHUB_ORG__"
+      INFRA_REPO="__INFRA_REPO__"
+      DOMAIN="__DOMAIN__"
+      ACME_EMAIL="__ACME_EMAIL__"
+      DB_PASSWORD="__DB_PASSWORD__"
+      KEYCLOAK_ADMIN_PASSWORD="__KEYCLOAK_ADMIN_PASSWORD__"
+      ENCRYPTION_KEY="__ENCRYPTION_KEY__"
+      GRAFANA_ADMIN_PASSWORD="__GRAFANA_ADMIN_PASSWORD__"
+      ANSIBLE_SSH_KEY_CONTENT="__ANSIBLE_SSH_KEY_CONTENT__"
+      LOG="/var/log/appstore-app-setup.log"
+      MARK_DIR="/var/lib/dozilab"
+
+      mkdir -p "$MARK_DIR"
+      exec > >(tee -a "$LOG" /var/log/cloud-init-output.log) 2>&1
+
+      on_fail() {
+        rc=$?
+        echo "DOZILAB_FAILED stack=${STACK_LABEL} rc=${rc} time=$(date -Is)" | tee /dev/console > "${MARK_DIR}/failed"
+        exit "$rc"
+      }
+      trap on_fail ERR
+
+      echo "App server setup started $(date -Is) [${ENVIRONMENT}]"
+
+      # Docker installieren
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -q
+      apt-get install -yq ca-certificates curl gnupg git jq
+
+      install -m 0755 -d /etc/apt/keyrings
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      chmod a+r /etc/apt/keyrings/docker.gpg
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+      apt-get update -q
+      apt-get install -yq docker-ce docker-ce-cli containerd.io docker-compose-plugin
+      usermod -aG docker ubuntu
+      systemctl enable --now docker
+
+      # Infra-Repo auschecken
+      git clone "https://github.com/${GITHUB_ORG}/${INFRA_REPO}.git" /opt/appstore
+      chown -R ubuntu:ubuntu /opt/appstore
+
+      # Ansible SSH Key ablegen
+      mkdir -p /home/ubuntu/.ssh
+      echo "${ANSIBLE_SSH_KEY_CONTENT}" > /home/ubuntu/.ssh/dozilab_ansible
+      chmod 600 /home/ubuntu/.ssh/dozilab_ansible
+      chown ubuntu:ubuntu /home/ubuntu/.ssh/dozilab_ansible
+
+      # Floating IP automatisch aus OpenStack Metadata holen
+      SERVER_IP=$(curl -sf http://169.254.169.254/latest/meta-data/public-ipv4 || \
+                  curl -sf http://169.254.169.254/openstack/latest/meta_data.json | python3 -c \
+                  "import sys,json; print(json.load(sys.stdin).get('public_ipv4',''))")
+      KEYCLOAK_URL="https://${SERVER_IP}:8443"
+
+      cat > /opt/appstore/.env << EOF
+      SERVER_IP=${SERVER_IP}
+
+      DB_USER=postgres
+      DB_PASSWORD=${DB_PASSWORD}
+      DB_NAME=dozilab
+      DB_PORT=5432
+
+      ENCRYPTION_KEY=${ENCRYPTION_KEY}
+
+      KEYCLOAK_ADMIN_USER=admin
+      KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_REALM=Dozilab
+      KEYCLOAK_CLIENT_ID_BACKEND=appstore-backend
+      KEYCLOAK_CLIENT_ID_FRONTEND=appstore-frontend
+      KEYCLOAK_JWKS_CACHE_TTL=3600
+      KEYCLOAK_URL=${KEYCLOAK_URL}
+
+      ANSIBLE_SSH_KEY_PATH=/home/ubuntu/.ssh/dozilab_ansible
+      ANSIBLE_SSH_KEY_NAME=dozilab-ansible-key
+
+      GRAFANA_ADMIN_USER=admin
+      GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+
+      BACKEND_IMAGE=ghcr.io/${GITHUB_ORG}/appstore-backend:latest
+      FRONTEND_IMAGE=ghcr.io/${GITHUB_ORG}/appstore-frontend:latest
+      EOF
+
+      chown ubuntu:ubuntu /opt/appstore/.env
+      chmod 600 /opt/appstore/.env
+
+      # logs Ordner anlegen
+      mkdir -p /opt/appstore/logs
+      chown ubuntu:ubuntu /opt/appstore/logs
+
+      cat > /etc/motd << EOF
+      AppStore App Server [${ENVIRONMENT}]
+      Stack:  ${STACK_LABEL}
+      Domain: ${DOMAIN}
+      Infra:  /opt/appstore
+      EOF
+
+      echo "DOZILAB_READY stack=${STACK_LABEL} time=$(date -Is)" | tee /dev/console > "${MARK_DIR}/ready"
+      echo "App server setup finished $(date -Is)"
+
+runcmd:
+  - [ bash, -lc, "/usr/local/bin/appstore-app-setup.sh" ]
+
+final_message: "AppStore App Server: cloud-init finished"
