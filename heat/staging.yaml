@@ -20,12 +20,12 @@ parameters:
 
   flavor:
     type: string
-    default: "gp1.medium"
+    default: "gp1.large"
     constraints:
       - allowed_values:
           - "gp1.medium"
           - "gp1.large"
-    description: "Mindestens gp1.medium — Keycloak braucht ~1.5GB RAM."
+    description: "At least gp1.medium — Keycloak requires ~1.5GB RAM."
 
   network:
     type: string
@@ -47,38 +47,60 @@ parameters:
 
   public_key:
     type: string
-    description: "Inhalt des lokalen Public Keys (~/.ssh/appstore-staging.pub)."
+    description: "Contents of your local public key (~/.ssh/dozilab-appstore-staging.pub)."
 
   github_org:
     type: string
-    description: "GitHub Organisation, z.B. dozilab"
+    description: "GitHub organisation, e.g. dozilab"
 
   infra_repo:
     type: string
     default: "appstore-infra"
-    description: "Name des Infra-Repos auf GitHub."
+    description: "Name of the infra repo on GitHub."
 
   db_password:
     type: string
     hidden: true
-    description: "Passwort für PostgreSQL."
+    description: "Password for PostgreSQL."
 
   keycloak_admin_password:
     type: string
     hidden: true
-    description: "Passwort für Keycloak Admin."
+    description: "Password for Keycloak admin."
 
   encryption_key:
     type: string
     hidden: true
-    description: "Fernet Encryption Key für das Backend."
+    description: "Fernet encryption key for the backend."
 
   grafana_admin_password:
     type: string
     hidden: true
-    description: "Passwort für Grafana Admin."
+    description: "Password for Grafana admin."
+
+  data_volume_size:
+    type: number
+    default: 100
+    description: "Size of the Cinder volume in GB (for Docker data)."
 
 resources:
+  data_volume:
+    type: OS::Cinder::Volume
+    properties:
+      name:
+        str_replace:
+          template: "appstore-staging-STACK-data"
+          params:
+            STACK: { get_param: stack_label }
+      size: { get_param: data_volume_size }
+
+  data_volume_attachment:
+    type: OS::Cinder::VolumeAttachment
+    properties:
+      volume_id: { get_resource: data_volume }
+      instance_uuid: { get_resource: server }
+      mountpoint: /dev/vdb
+
   keypair:
     type: OS::Nova::KeyPair
     properties:

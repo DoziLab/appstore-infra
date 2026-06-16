@@ -50,6 +50,27 @@ write_files:
       usermod -aG docker ubuntu
       systemctl enable --now docker
 
+      # Cinder Volume mounten (/dev/vdb → /data)
+      if [ -b /dev/vdb ]; then
+        if ! blkid /dev/vdb | grep -q ext4; then
+          echo "Formatting Cinder volume /dev/vdb..."
+          mkfs.ext4 /dev/vdb
+        fi
+        mkdir -p /data
+        mount /dev/vdb /data
+        # Persistent mount via fstab
+        UUID=$(blkid -s UUID -o value /dev/vdb)
+        echo "UUID=${UUID} /data ext4 defaults,nofail 0 2" >> /etc/fstab
+        echo "Cinder volume mounted at /data"
+      else
+        echo "No Cinder volume found at /dev/vdb, using root disk"
+        mkdir -p /data
+      fi
+
+      # Docker Daten-Ordner auf /data anlegen
+      mkdir -p /data/postgres /data/redis /data/keycloak /data/loki /data/grafana /data/prometheus
+      chown -R ubuntu:ubuntu /data
+
       # Infra-Repo auschecken
       git clone "https://github.com/${GITHUB_ORG}/${INFRA_REPO}.git" /opt/appstore
       chown -R ubuntu:ubuntu /opt/appstore

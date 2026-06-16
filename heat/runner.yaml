@@ -26,7 +26,7 @@ parameters:
       - allowed_values:
           - "gp1.small"
           - "gp1.medium"
-    description: "gp1.small reicht für den Runner."
+    description: "gp1.small is sufficient for the runner."
 
   network:
     type: string
@@ -49,21 +49,21 @@ parameters:
 
   public_key:
     type: string
-    description: "Inhalt des lokalen Public Keys (~/.ssh/dozilab-github-runner.pub)."
+    description: "Contents of your local public key (~/.ssh/dozilab-github-runner.pub)."
 
   github_org:
     type: string
-    description: "GitHub Organisation oder User, z.B. dozilab"
+    description: "GitHub organisation or user, e.g. dozilab"
 
   github_runner_token:
     type: string
     hidden: true
-    description: "Runner Registration Token aus GitHub (Settings → Actions → Runners → New runner)."
+    description: "Runner registration token from GitHub (Settings → Actions → Runners → New runner)."
 
   runner_labels:
     type: string
     default: "self-hosted,linux"
-    description: "Kommagetrennte Labels für den Runner, z.B. self-hosted,linux"
+    description: "Comma-separated labels for the runner, e.g. self-hosted,linux"
 
 resources:
   keypair:

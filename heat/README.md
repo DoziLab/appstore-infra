@@ -170,6 +170,39 @@ After all three servers are running, add these secrets to the backend and fronte
 
 ---
 
+## Manual Docker Login on the Server
+
+The CI/CD pipeline logs in to ghcr.io automatically on every deploy. For the **first manual start** or when pulling images manually, you need to log in once on the server.
+
+**Generate a GitHub Personal Access Token (Classic):**
+
+1. Go to GitHub → Settings → Developer settings → Personal access tokens → **Tokens (classic)**
+2. Click **Generate new token (classic)**
+3. Set a name, e.g. `appstore-staging-ghcr-read`
+4. Select scope: **`read:packages`** only
+5. Click **Generate token** → copy the token immediately (shown only once)
+
+**Log in on the server:**
+
+```bash
+ssh -i ~/.ssh/dozilab-appstore-staging ubuntu@<staging-ip>
+
+echo "<your-token>" | docker login ghcr.io -u <your-github-username> --password-stdin
+```
+
+**Pull and start manually:**
+
+```bash
+cd /opt/appstore
+docker compose -f docker-compose.yml -f docker-compose.staging.yml pull
+docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.staging.yml exec api alembic upgrade head
+```
+
+> After this first manual login, all subsequent deploys via CI/CD log in automatically using `GITHUB_TOKEN` — no manual token needed again.
+
+---
+
 ## Deleting a Server
 
 ```bash

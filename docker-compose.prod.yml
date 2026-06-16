@@ -21,6 +21,26 @@ services:
       - "80:80"
       - "443:443"
 
+  keycloak-cert-init:
+    image: openjdk:17-slim
+    restart: "no"
+    entrypoint: >
+      bash -c "
+        if [ ! -f /certs/keycloak.p12 ]; then
+          keytool -genkeypair -alias keycloak -keyalg RSA -keysize 2048
+            -validity 3650 -keystore /certs/keycloak.p12 -storetype PKCS12
+            -storepass keycloak -keypass keycloak
+            -dname 'CN=${SERVER_IP},OU=AppStore,O=DHBW,L=Mannheim,ST=BW,C=DE' &&
+          echo 'Certificate generated';
+        else
+          echo 'Certificate already exists';
+        fi
+      "
+    volumes:
+      - keycloak-certs:/certs
+    networks:
+      - appstore-network
+
   keycloak:
     command: >
       start
@@ -39,25 +59,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-
-  keycloak-cert-init:
-    image: openjdk:17-slim
-    entrypoint: >
-      bash -c "
-        if [ ! -f /certs/keycloak.p12 ]; then
-          keytool -genkeypair -alias keycloak -keyalg RSA -keysize 2048
-            -validity 3650 -keystore /certs/keycloak.p12 -storetype PKCS12
-            -storepass keycloak -keypass keycloak
-            -dname 'CN=${SERVER_IP},OU=AppStore,O=DHBW,L=Mannheim,ST=BW,C=DE';
-          echo 'Certificate generated';
-        else
-          echo 'Certificate already exists';
-        fi
-      "
-    volumes:
-      - keycloak-certs:/certs
-    networks:
-      - appstore-network
+      keycloak-cert-init:
+        condition: service_completed_successfully
 
   prometheus:
     image: prom/prometheus:v2.48.1
@@ -118,6 +121,33 @@ services:
 
 volumes:
   keycloak-certs:
+  postgres-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/postgres
+  redis-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/redis
   prometheus-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/prometheus
   loki-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/loki
   grafana-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /data/grafana
