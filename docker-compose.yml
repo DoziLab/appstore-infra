@@ -100,7 +100,6 @@ services:
         condition: service_healthy
     networks:
       - appstore-network
-
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     restart: unless-stopped

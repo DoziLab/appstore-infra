@@ -14,13 +14,10 @@ write_files:
       ENVIRONMENT="__ENVIRONMENT__"
       GITHUB_ORG="__GITHUB_ORG__"
       INFRA_REPO="__INFRA_REPO__"
-      DOMAIN="__DOMAIN__"
-      ACME_EMAIL="__ACME_EMAIL__"
       DB_PASSWORD="__DB_PASSWORD__"
       KEYCLOAK_ADMIN_PASSWORD="__KEYCLOAK_ADMIN_PASSWORD__"
       ENCRYPTION_KEY="__ENCRYPTION_KEY__"
       GRAFANA_ADMIN_PASSWORD="__GRAFANA_ADMIN_PASSWORD__"
-      ANSIBLE_SSH_KEY_CONTENT="__ANSIBLE_SSH_KEY_CONTENT__"
       LOG="/var/log/appstore-app-setup.log"
       MARK_DIR="/var/lib/dozilab"
 
@@ -58,7 +55,6 @@ write_files:
         fi
         mkdir -p /data
         mount /dev/vdb /data
-        # Persistent mount via fstab
         UUID=$(blkid -s UUID -o value /dev/vdb)
         echo "UUID=${UUID} /data ext4 defaults,nofail 0 2" >> /etc/fstab
         echo "Cinder volume mounted at /data"
@@ -69,20 +65,15 @@ write_files:
 
       # Docker Daten-Ordner auf /data anlegen mit korrekten Berechtigungen
       mkdir -p /data/postgres /data/redis /data/keycloak /data/loki /data/grafana /data/prometheus
-      chown 999:999 /data/postgres      # postgres container user
-      chown 10001:10001 /data/loki      # loki container user
-      chown 472:472 /data/grafana       # grafana container user
+      mkdir -p /data/loki/wal /data/loki/index /data/loki/chunks /data/loki/compactor /data/loki/index_cache
+      chown 999:999 /data/postgres
+      chown 10001:10001 /data/loki
+      chown 472:472 /data/grafana
       chown ubuntu:ubuntu /data/redis /data/prometheus /data/keycloak
 
       # Infra-Repo auschecken
       git clone "https://github.com/${GITHUB_ORG}/${INFRA_REPO}.git" /opt/appstore
       chown -R ubuntu:ubuntu /opt/appstore
-
-      # Ansible SSH Key ablegen
-      mkdir -p /home/ubuntu/.ssh
-      echo "${ANSIBLE_SSH_KEY_CONTENT}" > /home/ubuntu/.ssh/dozilab_ansible
-      chmod 600 /home/ubuntu/.ssh/dozilab_ansible
-      chown ubuntu:ubuntu /home/ubuntu/.ssh/dozilab_ansible
 
       # Floating IP automatisch aus OpenStack Metadata holen
       SERVER_IP=$(curl -sf http://169.254.169.254/latest/meta-data/public-ipv4 || \
@@ -90,33 +81,41 @@ write_files:
                   "import sys,json; print(json.load(sys.stdin).get('public_ipv4',''))")
       KEYCLOAK_URL="https://${SERVER_IP}:8443"
 
+      # Frontend Image Tag je nach Umgebung
+      if [ "${ENVIRONMENT}" = "staging" ]; then
+        FRONTEND_IMAGE="ghcr.io/${GITHUB_ORG}/appstore-frontend:staging"
+      else
+        FRONTEND_IMAGE="ghcr.io/${GITHUB_ORG}/appstore-frontend:latest"
+      fi
+
+      # .env schreiben
       cat > /opt/appstore/.env << EOF
-      SERVER_IP=${SERVER_IP}
+SERVER_IP=${SERVER_IP}
 
-      DB_USER=postgres
-      DB_PASSWORD=${DB_PASSWORD}
-      DB_NAME=dozilab
-      DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=${DB_PASSWORD}
+DB_NAME=dozilab
+DB_PORT=5432
 
-      ENCRYPTION_KEY=${ENCRYPTION_KEY}
+ENCRYPTION_KEY=${ENCRYPTION_KEY}
 
-      KEYCLOAK_ADMIN_USER=admin
-      KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
-      KEYCLOAK_REALM=Dozilab
-      KEYCLOAK_CLIENT_ID_BACKEND=appstore-backend
-      KEYCLOAK_CLIENT_ID_FRONTEND=appstore-frontend
-      KEYCLOAK_JWKS_CACHE_TTL=3600
-      KEYCLOAK_URL=${KEYCLOAK_URL}
+KEYCLOAK_ADMIN_USER=admin
+KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+KEYCLOAK_REALM=Dozilab
+KEYCLOAK_CLIENT_ID_BACKEND=appstore-backend
+KEYCLOAK_CLIENT_ID_FRONTEND=appstore-frontend
+KEYCLOAK_JWKS_CACHE_TTL=3600
+KEYCLOAK_URL=${KEYCLOAK_URL}
 
-      ANSIBLE_SSH_KEY_PATH=/home/ubuntu/.ssh/dozilab_ansible
-      ANSIBLE_SSH_KEY_NAME=dozilab-ansible-key
+ANSIBLE_SSH_KEY_PATH=/home/ubuntu/.ssh/dozilab_ansible
+ANSIBLE_SSH_KEY_NAME=dozilab-ansible-key
 
-      GRAFANA_ADMIN_USER=admin
-      GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
 
-      BACKEND_IMAGE=ghcr.io/${GITHUB_ORG}/appstore-backend:latest
-      FRONTEND_IMAGE=ghcr.io/${GITHUB_ORG}/appstore-frontend:latest
-      EOF
+BACKEND_IMAGE=ghcr.io/${GITHUB_ORG}/appstore-backend:latest
+FRONTEND_IMAGE=${FRONTEND_IMAGE}
+EOF
 
       chown ubuntu:ubuntu /opt/appstore/.env
       chmod 600 /opt/appstore/.env
@@ -134,11 +133,11 @@ write_files:
       chown -R ubuntu:ubuntu /opt/appstore/nginx/certs
 
       cat > /etc/motd << EOF
-      AppStore App Server [${ENVIRONMENT}]
-      Stack:  ${STACK_LABEL}
-      Domain: ${DOMAIN}
-      Infra:  /opt/appstore
-      EOF
+AppStore App Server [${ENVIRONMENT}]
+Stack:  ${STACK_LABEL}
+IP:     ${SERVER_IP}
+Infra:  /opt/appstore
+EOF
 
       echo "DOZILAB_READY stack=${STACK_LABEL} time=$(date -Is)" | tee /dev/console > "${MARK_DIR}/ready"
       echo "App server setup finished $(date -Is)"

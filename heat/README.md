@@ -105,6 +105,21 @@ cd /opt/appstore
 docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
 ```
 
+**Update Keycloak redirect URIs:**
+
+After the server is up, log in to the Keycloak Admin Console and update the `appstore-frontend` client with the correct server IP:
+
+1. Open `https://<floating-ip>:8443/admin`
+2. Login with `KEYCLOAK_ADMIN_USER` / `KEYCLOAK_ADMIN_PASSWORD` from `.env`
+3. Go to **Clients → appstore-frontend → Settings**
+4. Update the following fields with your floating IP:
+   - **Valid redirect URIs**: `https://<floating-ip>/*`
+   - **Valid post logout redirect URIs**: `https://<floating-ip>/*`
+   - **Web origins**: `https://<floating-ip>`
+5. Click **Save**
+
+> This step is required every time you recreate the server with a new floating IP.
+
 **Verify:**
 ```bash
 # Check all containers are running:
