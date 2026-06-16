@@ -139,6 +139,9 @@ services:
   nginx:
     image: nginx:alpine
     restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
     depends_on:
       keycloak:
         condition: service_healthy
