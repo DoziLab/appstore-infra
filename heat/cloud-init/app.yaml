@@ -76,9 +76,17 @@ write_files:
       chown -R ubuntu:ubuntu /opt/appstore
 
       # Floating IP automatisch aus OpenStack Metadata holen
-      SERVER_IP=$(curl -sf http://169.254.169.254/latest/meta-data/public-ipv4 || \
-                  curl -sf http://169.254.169.254/openstack/latest/meta_data.json | python3 -c \
-                  "import sys,json; print(json.load(sys.stdin).get('public_ipv4',''))")
+      SERVER_IP=""
+      SERVER_IP=$(curl -sf --max-time 5 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null) || true
+      if [ -z "${SERVER_IP}" ]; then
+        SERVER_IP=$(curl -sf --max-time 5 http://169.254.169.254/openstack/latest/meta_data.json 2>/dev/null \
+          | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('public_ipv4') or list(d.get('network',{}).get('links',[{}]))[0].get('mtu',''))" 2>/dev/null) || true
+      fi
+      if [ -z "${SERVER_IP}" ]; then
+        echo "WARNING: Could not determine public IP, using placeholder"
+        SERVER_IP="UNKNOWN"
+      fi
+      echo "Server IP: ${SERVER_IP}"
       KEYCLOAK_URL="https://${SERVER_IP}:8443"
 
       # Frontend Image Tag je nach Umgebung

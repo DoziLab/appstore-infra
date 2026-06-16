@@ -89,7 +89,7 @@ resources:
     properties:
       name:
         str_replace:
-          template: "appstore-staging-STACK-data"
+          template: "dozilab-STACK-data"
           params:
             STACK: { get_param: stack_label }
       size: { get_param: data_volume_size }
@@ -106,7 +106,7 @@ resources:
     properties:
       name:
         str_replace:
-          template: "appstore-staging-STACK-key"
+          template: "dozilab-STACK-key"
           params:
             STACK: { get_param: stack_label }
       public_key: { get_param: public_key }
@@ -114,7 +114,7 @@ resources:
   secgroup:
     type: OS::Neutron::SecurityGroup
     properties:
-      description: AppStore Staging security group
+      description: dozilab-STACK security group
       rules:
         - direction: ingress
           ethertype: IPv4
@@ -159,7 +159,7 @@ resources:
     properties:
       name:
         str_replace:
-          template: "appstore-staging-STACK"
+          template: "dozilab-STACK-server"
           params:
             STACK: { get_param: stack_label }
       image: { get_param: image }
