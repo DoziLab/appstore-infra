@@ -129,6 +129,11 @@ docker compose -f docker-compose.yml -f docker-compose.staging.yml ps
 docker compose -f docker-compose.yml -f docker-compose.staging.yml exec api alembic upgrade head
 ```
 
+> **Note:** nginx depends on Keycloak being healthy before it starts. Keycloak takes ~2-3 minutes on first boot. Once all other containers are running, start nginx manually:
+> ```bash
+> sudo docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d nginx
+> ```
+
 **Access:**
 | Service | URL |
 |---|---|

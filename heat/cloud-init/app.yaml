@@ -64,11 +64,12 @@ write_files:
       fi
 
       # Create Docker data directories on /data with correct permissions
-      mkdir -p /data/postgres /data/redis /data/keycloak /data/loki /data/grafana /data/prometheus
+      mkdir -p /data/postgres /data/redis /data/keycloak /data/prometheus
       mkdir -p /data/loki/wal /data/loki/index /data/loki/chunks /data/loki/compactor /data/loki/index_cache
-      chown 999:999 /data/postgres
-      chown 10001:10001 /data/loki
-      chown 472:472 /data/grafana
+      mkdir -p /data/grafana
+      chown -R 999:999 /data/postgres
+      chown -R 10001:10001 /data/loki
+      chown -R 472:472 /data/grafana
       chown ubuntu:ubuntu /data/redis /data/prometheus /data/keycloak
 
       # Clone infra repo
