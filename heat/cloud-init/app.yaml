@@ -90,17 +90,19 @@ write_files:
       echo "Server IP: ${SERVER_IP}"
       KEYCLOAK_URL="https://${SERVER_IP}:8443"
 
-      # Set frontend image tag based on environment
+      # Set image tags based on environment
       if [ "${ENVIRONMENT}" = "staging" ]; then
+        BACKEND_IMAGE="ghcr.io/${GITHUB_ORG}/appstore-backend:staging"
         FRONTEND_IMAGE="ghcr.io/${GITHUB_ORG}/appstore-frontend:staging"
       else
+        BACKEND_IMAGE="ghcr.io/${GITHUB_ORG}/appstore-backend:latest"
         FRONTEND_IMAGE="ghcr.io/${GITHUB_ORG}/appstore-frontend:latest"
       fi
 
       # Write .env (using printf instead of heredoc to avoid YAML parsing issues)
-      printf 'SERVER_IP=%s\n\nDB_USER=postgres\nDB_PASSWORD=%s\nDB_NAME=dozilab\nDB_PORT=5432\n\nENCRYPTION_KEY=%s\n\nKEYCLOAK_ADMIN_USER=admin\nKEYCLOAK_ADMIN_PASSWORD=%s\nKEYCLOAK_REALM=Dozilab\nKEYCLOAK_CLIENT_ID_BACKEND=appstore-backend\nKEYCLOAK_CLIENT_ID_FRONTEND=appstore-frontend\nKEYCLOAK_JWKS_CACHE_TTL=3600\nKEYCLOAK_URL=%s\n\nANSIBLE_SSH_KEY_PATH=/home/ubuntu/.ssh/dozilab_ansible\nANSIBLE_SSH_KEY_NAME=dozilab-ansible-key\n\nGRAFANA_ADMIN_USER=admin\nGRAFANA_ADMIN_PASSWORD=%s\n\nBACKEND_IMAGE=ghcr.io/%s/appstore-backend:latest\nFRONTEND_IMAGE=%s\n' \
+      printf 'SERVER_IP=%s\n\nDB_USER=postgres\nDB_PASSWORD=%s\nDB_NAME=dozilab\nDB_PORT=5432\n\nENCRYPTION_KEY=%s\n\nKEYCLOAK_ADMIN_USER=admin\nKEYCLOAK_ADMIN_PASSWORD=%s\nKEYCLOAK_REALM=Dozilab\nKEYCLOAK_CLIENT_ID_BACKEND=appstore-backend\nKEYCLOAK_CLIENT_ID_FRONTEND=appstore-frontend\nKEYCLOAK_JWKS_CACHE_TTL=3600\nKEYCLOAK_URL=%s\n\nANSIBLE_SSH_KEY_PATH=/home/ubuntu/.ssh/dozilab_ansible\nANSIBLE_SSH_KEY_NAME=dozilab-ansible-key\n\nGRAFANA_ADMIN_USER=admin\nGRAFANA_ADMIN_PASSWORD=%s\n\nBACKEND_IMAGE=%s\nFRONTEND_IMAGE=%s\n' \
         "${SERVER_IP}" "${DB_PASSWORD}" "${ENCRYPTION_KEY}" "${KEYCLOAK_ADMIN_PASSWORD}" \
-        "${KEYCLOAK_URL}" "${GRAFANA_ADMIN_PASSWORD}" "${GITHUB_ORG}" "${FRONTEND_IMAGE}" \
+        "${KEYCLOAK_URL}" "${GRAFANA_ADMIN_PASSWORD}" "${BACKEND_IMAGE}" "${FRONTEND_IMAGE}" \
         > /opt/appstore/.env
 
       chown ubuntu:ubuntu /opt/appstore/.env
