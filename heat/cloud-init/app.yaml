@@ -45,9 +45,8 @@ write_files:
       apt-get update -q
       apt-get install -yq docker-ce docker-ce-cli containerd.io docker-compose-plugin
       usermod -aG docker ubuntu
-      systemctl enable --now docker
 
-      # Mount Cinder volume (/dev/vdb -> /data)
+      # Mount Cinder volume (/dev/vdb -> /data) before starting Docker
       if [ -b /dev/vdb ]; then
         if ! blkid /dev/vdb | grep -q ext4; then
           echo "Formatting Cinder volume /dev/vdb..."
@@ -62,6 +61,12 @@ write_files:
         echo "No Cinder volume found at /dev/vdb, using root disk"
         mkdir -p /data
       fi
+
+      # Configure Docker to use Cinder volume for data
+      mkdir -p /data/docker
+      mkdir -p /etc/docker
+      echo '{"data-root": "/data/docker"}' > /etc/docker/daemon.json
+      systemctl enable --now docker
 
       # Create Docker data directories on /data with correct permissions
       mkdir -p /data/postgres /data/redis /data/keycloak /data/prometheus
