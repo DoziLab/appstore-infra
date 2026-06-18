@@ -46,6 +46,14 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - ANSIBLE_SSH_KEY_PATH=/run/secrets/dozilab_ansible
       - ANSIBLE_SSH_KEY_NAME=${ANSIBLE_SSH_KEY_NAME:-dozilab-ansible-key}
+      # GitHub App (template imports — empty defaults so the stack still
+      # starts when the feature is unconfigured; the API endpoints return
+      # a clear "GitHub App is not configured" error when called).
+      - GITHUB_APP_ID=${GITHUB_APP_ID:-}
+      - GITHUB_APP_SLUG=${GITHUB_APP_SLUG:-}
+      - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY:-}
+      - GITHUB_APP_STATE_SECRET=${GITHUB_APP_STATE_SECRET:-}
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:5173}
     depends_on:
       db:
         condition: service_healthy
@@ -81,6 +89,12 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - ANSIBLE_SSH_KEY_PATH=/run/secrets/dozilab_ansible
       - ANSIBLE_SSH_KEY_NAME=${ANSIBLE_SSH_KEY_NAME:-dozilab-ansible-key}
+      # GitHub App — celery imports may also need to mint installation tokens.
+      - GITHUB_APP_ID=${GITHUB_APP_ID:-}
+      - GITHUB_APP_SLUG=${GITHUB_APP_SLUG:-}
+      - GITHUB_APP_PRIVATE_KEY=${GITHUB_APP_PRIVATE_KEY:-}
+      - GITHUB_APP_STATE_SECRET=${GITHUB_APP_STATE_SECRET:-}
+      - FRONTEND_BASE_URL=${FRONTEND_BASE_URL:-http://localhost:5173}
     depends_on:
       db:
         condition: service_healthy
