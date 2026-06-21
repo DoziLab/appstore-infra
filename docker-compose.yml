@@ -106,6 +106,35 @@ services:
       - ./logs:/app/logs
       - ${ANSIBLE_SSH_KEY_PATH}:/run/secrets/dozilab_ansible:ro
 
+  # Single replica: a second beat instance would enqueue every scheduled
+  # task twice. Beat only enqueues to Redis — actual task execution happens
+  # on celery-worker. Beat needs DB/Keycloak env vars only because the
+  # Pydantic Settings class loaded at import time requires them; it never
+  # connects to either.
+  celery-beat:
+    image: ${BACKEND_IMAGE:-ghcr.io/your-org/appstore-backend:latest}
+    restart: unless-stopped
+    command: celery -A src.celery_app:celery_app beat --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DB_HOST=db
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - KEYCLOAK_URL=${KEYCLOAK_URL}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID_BACKEND:-appstore-backend}
+      - KEYCLOAK_JWKS_CACHE_TTL=${KEYCLOAK_JWKS_CACHE_TTL:-3600}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - appstore-network
+
   frontend:
     image: ${FRONTEND_IMAGE:-ghcr.io/your-org/appstore-frontend:latest}
     restart: unless-stopped
