@@ -16,6 +16,33 @@ services:
       logging: "promtail"
       logging_jobname: "celery-worker"
 
+  celery-beat:
+    image: ${BACKEND_IMAGE:-ghcr.io/dozilab/appstore-backend:staging}
+    restart: unless-stopped
+    command: celery -A src.celery_app:celery_app beat --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DB_HOST=db
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - KEYCLOAK_URL=${KEYCLOAK_URL}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID_BACKEND:-appstore-backend}
+      - KEYCLOAK_JWKS_CACHE_TTL=${KEYCLOAK_JWKS_CACHE_TTL:-3600}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - appstore-network
+    labels:
+      logging: "promtail"
+      logging_jobname: "celery-beat"
+
   keycloak:
     command: start --import-realm
 
